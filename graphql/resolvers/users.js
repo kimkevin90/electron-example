@@ -3,7 +3,7 @@ const { UserInputError, AuthenticationError } = require("apollo-server");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
 const { JWT_SECRET } = require("../../config/env.json");
-const { User } = require("../../models");
+const { Message, User } = require("../../models");
 
 module.exports = {
   Query: {
@@ -26,8 +26,28 @@ module.exports = {
         // }
 
         //자기 계정 뺴고 검색
-        const users = await User.findAll({
+        let users = await User.findAll({
+          attributes: ["username", "imageUrl", "createdAt"],
           where: { username: { [Op.ne]: user.username } },
+        });
+
+        //각 사람들의 최신 메시지를 가져오고 이때 관계쿼리가 아닌
+        //자바스크립트 문법으로 가져옴
+        const allUsersMessage = await Message.findAll({
+          where: {
+            [Op.or]: [{ from: user.username }, { to: user.username }],
+          },
+          order: [["createdAt", "DESC"]],
+        });
+
+        users = users.map((otherUser) => {
+          //find함수로 주어진 배열의 첫번째 요소값을 가져온다
+          const latestMessage = allUsersMessage.find(
+            (m) => m.from === otherUser.username || m.to === otherUser.username
+          );
+          console.log(latestMessage);
+          otherUser.latestMessage = latestMessage;
+          return otherUser;
         });
         return users;
       } catch (err) {
